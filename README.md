@@ -1,4 +1,4 @@
-# Hardened Home Assistant Remote Access Guide
+# Secure Home Assistant Remote Access Guide
 ### Cloudflare Edge + UniFi Firewall + Nginx Proxy Manager (NPM)
 
 A complete, beginner-friendly walkthrough for securely exposing Home Assistant to the internet. This setup conceals your home IP address, silently drops port scanners at your router firewall, provides end-to-end SSL encryption, and ensures rock-solid dashboard WebSocket connections.
@@ -14,9 +14,10 @@ A complete, beginner-friendly walkthrough for securely exposing Home Assistant t
 6. [Step 3: Nginx Proxy Manager (NPM) Setup](#step-3-nginx-proxy-manager-npm-setup)
 7. [Step 4: Home Assistant Configuration](#step-4-home-assistant-configuration)
 8. [Step 5: Verification (Avoiding the NAT Loopback Trap)](#step-5-verification-avoiding-the-nat-loopback-trap)
-9. [Helpful Integrations & DynDNS](#helpful-integrations--dyndns)
-10. [Troubleshooting Search Terms](#troubleshooting-search-terms)
-11. [Documentation & Reference Links](#documentation--reference-links)
+9. [Secure Remote Troubleshooting & Maintenance](#secure-remote-troubleshooting--maintenance)
+10. [Helpful Integrations & DynDNS](#helpful-integrations--dyndns)
+11. [Troubleshooting Search Terms](#troubleshooting-search-terms)
+12. [Documentation & Reference Links](#documentation--reference-links)
 
 ---
 
@@ -276,13 +277,50 @@ Go to **Developer Tools ➔ YAML ➔ Restart** to apply changes.
 
 ---
 
+## Secure Remote Troubleshooting & Maintenance
+
+If you need to access or fix your setup remotely—or invite a trusted friend/technician to help troubleshoot when things break—follow these best practices to do it safely:
+
+### 1. The Cardinal Rule: Never Expose Admin Ports
+* **Never port-forward port 81 (NPM Admin UI)** to the internet.
+* **Never port-forward port 22 (SSH)** to the internet.
+* **Never port-forward port 8443 / 443 (UniFi Gateway Console)** to the internet.
+Only the public reverse proxy port (`443`) should be forwarded.
+
+### 2. Best Method for Deep Troubleshooting: Mesh VPN (Tailscale)
+If Home Assistant hangs, a bad YAML edit breaks boot, or Nginx stops routing traffic, the public reverse proxy will be unreachable. You need an out-of-band "break-glass" path:
+* **Install Tailscale on the Host:** Install Tailscale on the Home Assistant machine (or your underlying Docker/Proxmox server).
+* **Node Sharing:** You can securely "share" just the Home Assistant node with a helper's Tailscale account.
+  * They get an encrypted tunnel directly to the machine (`100.x.x.x`).
+  * They can access SSH and the local web UI (`http://100.x.x.x:8123` or NPM on `:81`).
+  * They **cannot** access the rest of your home network.
+  * You can revoke their access in one click when finished.
+
+### 3. Best Method for Web-Only Remote Access: Cloudflare Zero Trust (Access)
+If you want to allow remote web admin access without requiring VPN software:
+1. In Cloudflare, navigate to **Zero Trust ➔ Access ➔ Applications**.
+2. Add an application protecting `ha.yourdomain.com` (or a dedicated maintenance subdomain like `npm.yourdomain.com`).
+3. Set an **Access Policy** requiring **One-Time Email PIN** or **Google/GitHub OAuth**.
+4. Whitelist only specific email addresses (e.g., your email and your helper's email).
+5. Anyone visiting the URL must enter a temporary code emailed to them before Cloudflare connects them to your home server.
+
+### 4. Temporary Admin Accounts in Home Assistant
+When inviting someone to fix something in Home Assistant:
+* **Never give out your primary credentials.**
+* Go to **Settings ➔ People ➔ Users ➔ Add User**.
+* Create a dedicated user with **Administrator** rights.
+* Have them set up **Two-Factor Authentication (TOTP)** on first login.
+* Once the issue is resolved, delete or disable the user account immediately.
+
+---
+
 ## Helpful Integrations & DynDNS
 
 1. **[Cloudflare Integration](https://www.home-assistant.io/integrations/cloudflare/):** Automatically updates your Cloudflare `A` record when your ISP changes your public WAN IP while maintaining proxy protection.
 2. **[UniFi Network Integration](https://www.home-assistant.io/integrations/unifi/):** Connects to your gateway to monitor router health, WAN uptime, port metrics, and network client presence.
 3. **[Certificate Expiry Sensor](https://www.home-assistant.io/integrations/cert_expiry/):** Native sensor that monitors `ha.yourdomain.com` and alerts you weeks before any SSL certificate renewal issue.
 4. **[Nginx Proxy Manager Add-on](https://github.com/hassio-addons/addon-nginx-proxy-manager):** Runs NPM directly inside Home Assistant OS, keeping reverse proxy configuration in regular Home Assistant backups.
-5. **[WireGuard](https://www.home-assistant.io/integrations/wireguard/) or [Tailscale](https://www.home-assistant.io/integrations/tailscale/) (Emergency Break-Glass VPN):** Provides out-of-band private access to your LAN if Cloudflare ever experiences an outage or a firewall rule misconfiguration locks you out.
+5. **[Tailscale](https://www.home-assistant.io/integrations/tailscale/) / [WireGuard](https://www.home-assistant.io/integrations/wireguard/):** Provides an encrypted backdoor into your network if Cloudflare or public DNS ever has an issue.
 
 ---
 
@@ -295,7 +333,7 @@ Go to **Developer Tools ➔ YAML ➔ Restart** to apply changes.
 * `UniFi firewall rule allow only cloudflare IPs port forward`
 * `UniFi drop direct WAN port forward traffic cloudflare bypass`
 * `Nginx Proxy Manager "real_ip_header CF-Connecting-IP" set_real_ip_from`
-* `Home Assistant webhook local_only true automation security`
+* `Tailscale Home Assistant node sharing remote fix`
 
 ---
 
@@ -307,3 +345,5 @@ Go to **Developer Tools ➔ YAML ➔ Restart** to apply changes.
 * **Home Assistant HTTP:** [Home Assistant HTTP Integration Documentation](https://www.home-assistant.io/integrations/http/)
 * **UniFi Firewall:** [Ubiquiti UniFi Gateway Introduction to Firewall Rules](https://help.ui.com/hc/en-us/articles/115003173168-UniFi-Gateway-Introduction-to-Firewall-Rules)
 * **Nginx Proxy Manager:** [Nginx Proxy Manager Official Documentation](https://nginxproxymanager.com/)
+* **Cloudflare Access:** [Cloudflare Zero Trust Access Documentation](https://developers.cloudflare.com/cloudflare-one/policies/access/)
+* **Tailscale Node Sharing:** [Tailscale Node Sharing Documentation](https://tailscale.com/kb/1084/sharing)
